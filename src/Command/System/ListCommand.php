@@ -15,23 +15,65 @@ class ListCommand extends Command
 	{
 		$io = new Style($input, $output);
 
-		$io->title('Micro CLI Framework');
-		$io->text('Usage:');
+		$io->text('<comment>Usage:</comment>');
 		$io->text('  command [options] [arguments]');
 		$io->newLine();
 
+		// --- НОВЫЙ БЛОК: Глобальные опции ---
+		$io->text('<comment>Options:</comment>');
+		$globalOptions = [
+			'-h, --help'    => 'Display help for the given command',
+			'-q, --quiet'   => 'Do not output any message',
+			'-v, --verbose' => 'Increase the verbosity of messages: 1 for normal output, 2 for more verbose output',
+		];
+
+		// Находим самую длинную опцию для выравнивания
+		$maxOptWidth = 0;
+		foreach (array_keys($globalOptions) as $optName) {
+			if (strlen($optName) > $maxOptWidth) {
+				$maxOptWidth = strlen($optName);
+			}
+		}
+
+		foreach ($globalOptions as $optName => $desc) {
+			$paddedOpt = str_pad($optName, $maxOptWidth + 2);
+			$output->writeln("  <info>{$paddedOpt}</info>{$desc}");
+		}
+		$io->newLine();
+		// ------------------------------------
+
 		$io->text('<comment>Available commands:</comment>');
 
-		// Fetch all registered commands from the Application
 		$commands = $this->getApplication()->all();
-		ksort($commands); // Sort alphabetically by name
+		ksort($commands);
 
+		$namespaces = [];
+		$maxWidth = 0;
+
+		// Группировка и подсчет длины команд
 		foreach ($commands as $name => $command) {
-			// Read description either from property or Attribute (we set it in Command::parseAttributes)
-			$description = $command->getDescription() ?: 'No description provided.';
+			$parts = explode(':', $name);
+			$namespace = count($parts) > 1 ? $parts[0] : '_global';
 
-			// Format output: align command names to the left (25 chars width)
-			$output->writeln(sprintf("  <info>%-25s</info> %s", $name, $description));
+			$namespaces[$namespace][$name] = $command;
+
+			if (strlen($name) > $maxWidth) {
+				$maxWidth = strlen($name);
+			}
+		}
+
+		// Рендеринг команд "лесенкой"
+		foreach ($namespaces as $namespace => $cmds) {
+			if ($namespace !== '_global') {
+				$io->text(" <comment>{$namespace}</comment>");
+			}
+
+			foreach ($cmds as $name => $command) {
+				$description = $command->getDescription() ?: '';
+				$paddedName = str_pad($name, $maxWidth + 2);
+
+				$output->writeln("    <info>{$paddedName}</info>{$description}");
+			}
 		}
 
 		$io->newLine();

@@ -6,6 +6,8 @@ use Smerteliko\MicroCli\Application;
 use Smerteliko\MicroCli\Config\Config;
 use Smerteliko\MicroCli\Config\Loader\PhpLoader;
 use Smerteliko\MicroCli\Config\Loader\XmlLoader;
+use Smerteliko\MicroCli\DI\Container;
+use Smerteliko\MicroCli\Discovery\CommandDiscoverer;
 
 // 1. Initialize DI Container
 $container = new Container();

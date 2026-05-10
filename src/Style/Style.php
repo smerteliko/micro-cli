@@ -118,4 +118,14 @@ class Style
 
 		return in_array($answer, ['y', 'yes', '1', 'true'], true);
 	}
+
+	public function table(array $headers, array $rows): void
+	{
+		$table = new Table($this->output);
+		$table->setHeaders($headers)
+		      ->setRows($rows)
+		      ->render();
+
+		$this->newLine();
+	}
 }
