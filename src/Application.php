@@ -3,6 +3,10 @@
 namespace Smerteliko\MicroCli;
 
 use Smerteliko\MicroCli\Command\Command;
+use Smerteliko\MicroCli\Command\System\ListCommand;
+use Smerteliko\MicroCli\Command\System\HelpCommand;
+use Smerteliko\MicroCli\Command\System\ScheduleRunCommand;
+use Smerteliko\MicroCli\Command\System\ServerConfigCommand;
 use Smerteliko\MicroCli\Input\ArgvInput;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\ConsoleOutput;
@@ -13,6 +17,17 @@ class Application
 {
 	/** @var array<string, Command> */
 	private array $commands = [];
+
+	public function __construct(private ?\Smerteliko\MicroCli\Config\Config $config = null)
+	{
+		// Register default system commands
+		$this->add(new ListCommand());
+		$this->add(new ServerConfigCommand());
+		$this->add(new HelpCommand());
+		if ($this->config !== null) {
+			$this->add(new ScheduleRunCommand($this->config));
+		}
+	}
 
 	public function add(Command $command): void
 	{
@@ -30,17 +45,27 @@ class Application
 		$input = $input ?? new ArgvInput();
 		$output = $output ?? new ConsoleOutput();
 
+		// Check for verbosity flag globally (-v)
+		if ($input->hasOption('v') || $input->hasOption('verbose')) {
+			$output->setVerbosity(OutputInterface::VERBOSITY_VERBOSE);
+		}
+
 		$commandName = $input->getCommandName();
 
+		// If no command, default to 'list'
 		if (!$commandName) {
-			$output->writeln("<error>Error: Command name is not specified.</error>");
-			$this->printHelp($output);
-			return 1;
+			$commandName = 'list';
+		}
+
+		// Global Help Interceptor
+		if ($input->hasOption('help') || $input->hasOption('h')) {
+			// Swap the command to 'help' and pass the original command as argument
+			$input->setArgument('command_name', $commandName);
+			$commandName = 'help';
 		}
 
 		if (!isset($this->commands[$commandName])) {
 			$output->writeln("<error>Error: Command '{$commandName}' not found.</error>");
-			$this->printHelp($output);
 			return 1;
 		}
 
@@ -52,17 +77,16 @@ class Application
 				$command->getRegisteredOptions()
 			);
 
-			// If you implemented validate() in ArgvInput previously, call it here
 			if (method_exists($input, 'validate')) {
 				$input->validate($command->getRegisteredArguments());
 			}
 
-			// Auto-inject properties!
 			$command->bindProperties($input);
 
 			return $command->execute($input, $output);
+
 		} catch (Throwable $e) {
-			$output->writeln("<error>Critical Error: {$e->getMessage()}</error>");
+			$this->renderThrowable($e, $output);
 			return 1;
 		}
 	}
@@ -80,22 +104,46 @@ class Application
 			return;
 		}
 
-		// Ищем все PHP файлы в директории
 		foreach (glob($directory . '/*.php') as $file) {
-			// Получаем имя класса из имени файла (например, GreetCommand)
 			$className = basename($file, '.php');
-			// Собираем полное имя класса с неймспейсом (FQN)
 			$fullClassName = $namespace . '\\' . $className;
 
-			// Проверяем, существует ли класс и наследуется ли он от нашей базовой команды
 			if (class_exists($fullClassName) && is_subclass_of($fullClassName, Command::class)) {
 				$reflection = new \ReflectionClass($fullClassName);
 
-				// Убеждаемся, что класс можно инстанцировать (не абстрактный)
 				if (!$reflection->isAbstract()) {
 					$this->add(new $fullClassName());
 				}
 			}
 		}
+	}
+
+
+	/**
+	 * Renders a beautiful exception output with Stack Trace if verbose
+	 */
+	private function renderThrowable(Throwable $e, OutputInterface $output): void
+	{
+		$output->writeln('');
+		$output->writeln("<error>  [" . get_class($e) . "]  </error>");
+		$output->writeln("<error>  " . $e->getMessage() . "  </error>");
+		$output->writeln('');
+
+		$output->writeln("<comment>In {$e->getFile()} on line {$e->getLine()}</comment>");
+
+		if ($output->isVerbose()) {
+			$output->writeln('');
+			$output->writeln('<comment>Exception trace:</comment>');
+			foreach ($e->getTrace() as $i => $trace) {
+				$class = $trace['class'] ?? '';
+				$type = $trace['type'] ?? '';
+				$func = $trace['function'] ?? '';
+				$file = $trace['file'] ?? 'n/a';
+				$line = $trace['line'] ?? 'n/a';
+				$output->writeln(" {$i}. {$class}{$type}{$func}() at <info>{$file}:{$line}</info>");
+			}
+		}
+
+		$output->writeln('');
 	}
 }

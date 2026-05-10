@@ -73,6 +73,11 @@ class ArgvInput implements InputInterface {
 		                        $this->options) && $this->options[ $name ] !== FALSE;
 	}
 
+	public function setArgument(string|int $name, mixed $value): void
+	{
+		$this->boundArguments[$name] = $value;
+	}
+
 	public function validate(array $argumentsDefinition): void {
 		$missingArguments = [];
 
