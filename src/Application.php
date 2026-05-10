@@ -52,8 +52,13 @@ class Application
 				$command->getRegisteredOptions()
 			);
 
-			// Validate input before executing
-			$input->validate($command->getRegisteredArguments());
+			// If you implemented validate() in ArgvInput previously, call it here
+			if (method_exists($input, 'validate')) {
+				$input->validate($command->getRegisteredArguments());
+			}
+
+			// Auto-inject properties!
+			$command->bindProperties($input);
 
 			return $command->execute($input, $output);
 		} catch (Throwable $e) {

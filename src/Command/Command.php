@@ -2,7 +2,11 @@
 
 namespace Smerteliko\MicroCli\Command;
 
+use ReflectionClass;
 use Smerteliko\MicroCli\Application;
+use Smerteliko\MicroCli\Attributes\Argument;
+use Smerteliko\MicroCli\Attributes\AsConsoleCommand;
+use Smerteliko\MicroCli\Attributes\Option;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\OutputInterface;
 
@@ -13,22 +17,75 @@ abstract class Command
 
 	protected string $name = '';
 	protected string $description = '';
-
-	/** @var array<string, array> */
 	protected array $arguments = [];
-
-	/** @var array<string, array> */
 	protected array $options = [];
-
-	protected ?Application $application = null;
-	protected ?string $schedule = null; // Поле для cron-выражения
 
 	public function __construct()
 	{
+		$this->parseAttributes();
 		$this->configure();
 	}
 
-	abstract protected function configure(): void;
+	/**
+	 * Parses PHP 8 Attributes to auto-configure the command
+	 */
+	private function parseAttributes(): void
+	{
+		$reflection = new ReflectionClass($this);
+
+		// 1. Parse Class Attribute (Name and Description)
+		$classAttributes = $reflection->getAttributes(AsConsoleCommand::class);
+		if (!empty($classAttributes)) {
+			/** @var AsConsoleCommand $commandAttribute */
+			$commandAttribute = $classAttributes[0]->newInstance();
+			$this->name = $commandAttribute->name;
+			$this->description = $commandAttribute->description;
+		}
+
+		// 2. Parse Property Attributes (Arguments and Options)
+		foreach ($reflection->getProperties() as $property) {
+			$argAttributes = $property->getAttributes(Argument::class);
+			if (!empty($argAttributes)) {
+				/** @var Argument $arg */
+				$arg = $argAttributes[0]->newInstance();
+				$mode = $arg->required ? self::ARG_REQUIRED : self::ARG_OPTIONAL;
+				$this->addArgument($property->getName(), $mode, $arg->description, $arg->default);
+			}
+
+			$optAttributes = $property->getAttributes(Option::class);
+			if (!empty($optAttributes)) {
+				/** @var Option $opt */
+				$opt = $optAttributes[0]->newInstance();
+				$this->addOption($property->getName(), $opt->description, $opt->default);
+			}
+		}
+	}
+
+	/**
+	 * Automatically binds input values to class properties based on Attributes
+	 */
+	public function bindProperties(InputInterface $input): void
+	{
+		$reflection = new ReflectionClass($this);
+
+		foreach ($reflection->getProperties() as $property) {
+			$name = $property->getName();
+
+			if (!empty($property->getAttributes(Argument::class))) {
+				$property->setValue($this, $input->getArgument($name));
+			}
+
+			if (!empty($property->getAttributes(Option::class))) {
+				$property->setValue($this, $input->getOption($name));
+			}
+		}
+	}
+
+	// Optional manual configuration method
+	protected function configure(): void
+	{
+	}
+
 
 	abstract public function execute(InputInterface $input, OutputInterface $output): int;
 
@@ -110,4 +167,5 @@ abstract class Command
 	{
 		return $this->schedule;
 	}
+
 }
