@@ -4,9 +4,13 @@ namespace Smerteliko\MicroCli\Discovery;
 
 use Smerteliko\MicroCli\Attributes\AsConsoleCommand;
 use ReflectionClass;
+use Smerteliko\MicroCli\DI\ContainerInterface;
 
 class CommandDiscoverer
 {
+	public function __construct(private readonly ContainerInterface $container)
+	{
+	}
 	public function discover(string $directory, string $namespace): array
 	{
 		$commands = [];
@@ -25,9 +29,9 @@ class CommandDiscoverer
 				if (!$reflection->isAbstract()) {
 					$attributes = $reflection->getAttributes(AsConsoleCommand::class);
 
-					// If class has our Attribute, it's a command!
 					if (!empty($attributes)) {
-						$commands[] = new $fullClassName();
+						// Magic! Let the container build the command with all its dependencies
+						$commands[] = $this->container->get($fullClassName);
 					}
 				}
 			}

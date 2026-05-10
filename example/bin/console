@@ -7,15 +7,29 @@ use Smerteliko\MicroCli\Config\Config;
 use Smerteliko\MicroCli\Config\Loader\PhpLoader;
 use Smerteliko\MicroCli\Config\Loader\XmlLoader;
 
+// 1. Initialize DI Container
+$container = new Container();
+
+// 2. Setup Configuration
 $config = new Config();
-$config->addLoader(new PhpLoader())
-       ->addLoader(new XmlLoader());
+$config->addLoader(new PhpLoader());
 $config->load(__DIR__ . '/../config/app.php');
 
+// Register config in the container so commands can ask for it!
+$container->set(Config::class, $config);
+
+// 3. Initialize Application
 $app = new Application($config);
+$container->set(Application::class, $app);
 
+// 4. Auto-discover User Commands using Container
+$discoverer = new CommandDiscoverer($container);
+$commandPaths = $config->get('commands_paths', []);
 
-$commandsDir = __DIR__ . '/../src/Commands';
-$app->loadCommandsFromDirectory($commandsDir, 'App\\Commands');
-
+foreach ($commandPaths as $path => $namespace) {
+	$commands = $discoverer->discover($path, $namespace);
+	foreach ($commands as $command) {
+		$app->add($command);
+	}
+}
 exit($app->run());
