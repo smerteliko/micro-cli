@@ -8,6 +8,9 @@ use Smerteliko\MicroCli\Config\Loader\PhpLoader;
 use Smerteliko\MicroCli\Config\Loader\XmlLoader;
 use Smerteliko\MicroCli\DI\Container;
 use Smerteliko\MicroCli\Discovery\CommandDiscoverer;
+use Smerteliko\MicroCli\EventDispatcher\EventDispatcher;
+use Smerteliko\MicroCli\Events\ConsoleCommandEvent;
+use Smerteliko\MicroCli\Events\ConsoleTerminateEvent;
 
 // 1. Initialize DI Container
 $container = new Container();
@@ -34,4 +37,24 @@ foreach ($commandPaths as $path => $namespace) {
 		$app->add($command);
 	}
 }
+
+$dispatcher = new EventDispatcher();
+
+$dispatcher->addListener(ConsoleCommandEvent::class, function (ConsoleCommandEvent $event) {
+	if ($event->command->getName() === 'greet' && date('w') == 0) {
+		$event->output->writeln('<error>Sorry, no greetings on Sundays!</error>');
+		$event->disableCommand();
+	}
+});
+
+$startTime = microtime(true);
+$dispatcher->addListener(ConsoleTerminateEvent::class, function (ConsoleTerminateEvent $event) use ($startTime) {
+	$duration = round(microtime(true) - $startTime, 4);
+	if ($event->output->isVerbose()) {
+		$event->output->writeln("<comment>Command finished in {$duration} seconds with exit code {$event->getExitCode()}</comment>");
+	}
+});
+
+$app->setDispatcher($dispatcher);
+$container->set(EventDispatcher::class, $dispatcher);
 exit($app->run());

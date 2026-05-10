@@ -7,42 +7,42 @@ use Smerteliko\MicroCli\Command\System\ListCommand;
 use Smerteliko\MicroCli\Command\System\HelpCommand;
 use Smerteliko\MicroCli\Command\System\ScheduleRunCommand;
 use Smerteliko\MicroCli\Command\System\ServerConfigCommand;
+use Smerteliko\MicroCli\EventDispatcher\EventDispatcher;
+use Smerteliko\MicroCli\Events\ConsoleCommandEvent;
+use Smerteliko\MicroCli\Events\ConsoleTerminateEvent;
 use Smerteliko\MicroCli\Input\ArgvInput;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\ConsoleOutput;
 use Smerteliko\MicroCli\Output\OutputInterface;
 use Throwable;
 
-class Application
-{
+class Application {
 	/** @var array<string, Command> */
-	private array $commands = [];
+	private array            $commands   = [];
+	private ?EventDispatcher $dispatcher = NULL;
 
-	public function __construct(private ?\Smerteliko\MicroCli\Config\Config $config = null)
-	{
+	public function __construct(private ?\Smerteliko\MicroCli\Config\Config $config = NULL) {
 		// Register default system commands
 		$this->add(new ListCommand());
 		$this->add(new ServerConfigCommand());
 		$this->add(new HelpCommand());
-		if ($this->config !== null) {
+		if ($this->config !== NULL) {
 			$this->add(new ScheduleRunCommand($this->config));
 		}
 	}
 
-	public function add(Command $command): void
-	{
+	public function add(Command $command): void {
 		$command->setApplication($this); // Инжектим приложение в команду
-		$this->commands[$command->getName()] = $command;
+		$this->commands[ $command->getName() ] = $command;
 	}
 
-	public function all(): array
-	{
+	public function all(): array {
 		return $this->commands;
 	}
 
-	public function run(?InputInterface $input = null, ?OutputInterface $output = null): int
-	{
-		$input = $input ?? new ArgvInput();
+	public function run(?InputInterface  $input = NULL,
+	                    ?OutputInterface $output = NULL): int {
+		$input  = $input ?? new ArgvInput();
 		$output = $output ?? new ConsoleOutput();
 
 		// Check for verbosity flag globally (-v)
@@ -64,51 +64,75 @@ class Application
 			$commandName = 'help';
 		}
 
-		if (!isset($this->commands[$commandName])) {
+		if (!isset($this->commands[ $commandName ])) {
 			$output->writeln("<error>Error: Command '{$commandName}' not found.</error>");
+
 			return 1;
 		}
 
+
 		try {
-			$command = $this->commands[$commandName];
+			$command = $this->commands[ $commandName ];
 
-			$input->bind(
-				$command->getRegisteredArguments(),
-				$command->getRegisteredOptions()
-			);
-
+			$input->bind($command->getRegisteredArguments(),
+			             $command->getRegisteredOptions());
 			if (method_exists($input, 'validate')) {
 				$input->validate($command->getRegisteredArguments());
 			}
-
 			$command->bindProperties($input);
 
-			return $command->execute($input, $output);
+			// 1. DISPATCH BEFORE COMMAND
+			if ($this->dispatcher) {
+				$event = new ConsoleCommandEvent($command, $input, $output);
+				$this->dispatcher->dispatch($event);
 
-		} catch (Throwable $e) {
+				if (!$event->commandShouldRun()) {
+					$output->writeln("<comment>Command execution was aborted by a listener.</comment>");
+
+					return 113; // Спец-код отмены (как в Symfony)
+				}
+			}
+
+			// 2. RUN COMMAND
+			$exitCode = $command->execute($input, $output);
+
+			// 3. DISPATCH AFTER COMMAND
+			if ($this->dispatcher) {
+				$terminateEvent = new ConsoleTerminateEvent($command,
+				                                            $input,
+				                                            $output,
+				                                            $exitCode);
+				$this->dispatcher->dispatch($terminateEvent);
+				$exitCode = $terminateEvent->getExitCode();
+			}
+
+			return $exitCode;
+		} catch ( Throwable $e ) {
 			$this->renderThrowable($e, $output);
+
 			return 1;
 		}
 	}
 
-	private function printHelp(OutputInterface $output): void
-	{
+	private function printHelp(OutputInterface $output): void {
 		$output->writeln("<comment>Available commands:</comment>");
 		foreach ($this->commands as $name => $command) {
 			$output->writeln("  <info>{$name}</info> - {$command->getDescription()}");
 		}
 	}
-	public function loadCommandsFromDirectory(string $directory, string $namespace): void
-	{
+
+	public function loadCommandsFromDirectory(string $directory,
+	                                          string $namespace): void {
 		if (!is_dir($directory)) {
 			return;
 		}
 
 		foreach (glob($directory . '/*.php') as $file) {
-			$className = basename($file, '.php');
+			$className     = basename($file, '.php');
 			$fullClassName = $namespace . '\\' . $className;
 
-			if (class_exists($fullClassName) && is_subclass_of($fullClassName, Command::class)) {
+			if (class_exists($fullClassName) && is_subclass_of($fullClassName,
+			                                                   Command::class)) {
 				$reflection = new \ReflectionClass($fullClassName);
 
 				if (!$reflection->isAbstract()) {
@@ -122,8 +146,8 @@ class Application
 	/**
 	 * Renders a beautiful exception output with Stack Trace if verbose
 	 */
-	private function renderThrowable(Throwable $e, OutputInterface $output): void
-	{
+	private function renderThrowable(Throwable       $e,
+	                                 OutputInterface $output): void {
 		$output->writeln('');
 		$output->writeln("<error>  [" . get_class($e) . "]  </error>");
 		$output->writeln("<error>  " . $e->getMessage() . "  </error>");
@@ -136,14 +160,18 @@ class Application
 			$output->writeln('<comment>Exception trace:</comment>');
 			foreach ($e->getTrace() as $i => $trace) {
 				$class = $trace['class'] ?? '';
-				$type = $trace['type'] ?? '';
-				$func = $trace['function'] ?? '';
-				$file = $trace['file'] ?? 'n/a';
-				$line = $trace['line'] ?? 'n/a';
+				$type  = $trace['type'] ?? '';
+				$func  = $trace['function'] ?? '';
+				$file  = $trace['file'] ?? 'n/a';
+				$line  = $trace['line'] ?? 'n/a';
 				$output->writeln(" {$i}. {$class}{$type}{$func}() at <info>{$file}:{$line}</info>");
 			}
 		}
 
 		$output->writeln('');
+	}
+
+	public function setDispatcher(EventDispatcher $dispatcher): void {
+		$this->dispatcher = $dispatcher;
 	}
 }
