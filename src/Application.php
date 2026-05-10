@@ -3,88 +3,165 @@
 namespace Smerteliko\MicroCli;
 
 use Smerteliko\MicroCli\Command\Command;
+use Smerteliko\MicroCli\Command\System\ListCommand;
+use Smerteliko\MicroCli\Command\System\HelpCommand;
+use Smerteliko\MicroCli\Command\System\MacroCommand;
+use Smerteliko\MicroCli\Command\System\ScheduleRunCommand;
+use Smerteliko\MicroCli\Command\System\ServeGuiCommand;
+use Smerteliko\MicroCli\Command\System\ServerConfigCommand;
+use Smerteliko\MicroCli\Config\Config;
+use Smerteliko\MicroCli\DI\ContainerInterface;
+use Smerteliko\MicroCli\EventDispatcher\EventDispatcher;
+use Smerteliko\MicroCli\Events\ConsoleCommandEvent;
+use Smerteliko\MicroCli\Events\ConsoleTerminateEvent;
 use Smerteliko\MicroCli\Input\ArgvInput;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\ConsoleOutput;
 use Smerteliko\MicroCli\Output\OutputInterface;
 use Throwable;
 
-class Application
-{
-	/** @var array<string, Command> */
-	private array $commands = [];
+class Application {
+    /** @var array<string, Command> */
+    private array            $commands   = [];
+    private ?EventDispatcher $dispatcher = NULL;
 
-	public function add(Command $command): void
-	{
-		$this->commands[$command->getName()] = $command;
-	}
+    public function __construct(protected string                            $name = 'Micro CLI',
+                                protected string                            $version = '1.0.0',
+                                protected ?ContainerInterface               $container = NULL,
+                                private ?Config $config = NULL
+    ) {
+        // Register default system commands
+        $this->setSystemCommands();
+    }
 
-	public function run(?InputInterface $input = null, ?OutputInterface $output = null): int
-	{
-		$input = $input ?? new ArgvInput();
-		$output = $output ?? new ConsoleOutput();
+    public function add(Command $command): void {
+        $command->setApplication($this); // Инжектим приложение в команду
+        $this->commands[ $command->getName() ] = $command;
+    }
 
-		$commandName = $input->getCommandName();
+    public function all(): array {
+        return $this->commands;
+    }
 
-		if (!$commandName) {
-			$output->writeln("<error>Error: Command name is not specified.</error>");
-			$this->printHelp($output);
-			return 1;
-		}
+    public function run(?InputInterface  $input = NULL,
+                        ?OutputInterface $output = NULL): int {
+        $input  = $input ?? new ArgvInput();
+        $output = $output ?? new ConsoleOutput();
 
-		if (!isset($this->commands[$commandName])) {
-			$output->writeln("<error>Error: Command '{$commandName}' not found.</error>");
-			$this->printHelp($output);
-			return 1;
-		}
+        // Check for verbosity flag globally (-v)
+        if ($input->hasOption('v') || $input->hasOption('verbose')) {
+            $output->setVerbosity(OutputInterface::VERBOSITY_VERBOSE);
+        }
 
-		try {
-			$command = $this->commands[$commandName];
+        $commandName = $input->getCommandName();
 
-			$input->bind(
-				$command->getRegisteredArguments(),
-				$command->getRegisteredOptions()
-			);
+        // If no command, default to 'list'
+        if (!$commandName) {
+            $commandName = 'list';
+        }
 
-			// Validate input before executing
-			$input->validate($command->getRegisteredArguments());
+        // Global Help Interceptor
+        if ($input->hasOption('help') || $input->hasOption('h')) {
+            // Swap the command to 'help' and pass the original command as argument
+            $input->setArgument('command_name', $commandName);
+            $commandName = 'help';
+        }
 
-			return $command->execute($input, $output);
-		} catch (Throwable $e) {
-			$output->writeln("<error>Critical Error: {$e->getMessage()}</error>");
-			return 1;
-		}
-	}
+        if (!isset($this->commands[ $commandName ])) {
+            $output->writeln("<error>Error: Command '{$commandName}' not found.</error>");
 
-	private function printHelp(OutputInterface $output): void
-	{
-		$output->writeln("<comment>Available commands:</comment>");
-		foreach ($this->commands as $name => $command) {
-			$output->writeln("  <info>{$name}</info> - {$command->getDescription()}");
-		}
-	}
-	public function loadCommandsFromDirectory(string $directory, string $namespace): void
-	{
-		if (!is_dir($directory)) {
-			return;
-		}
+            return 1;
+        }
 
-		// Ищем все PHP файлы в директории
-		foreach (glob($directory . '/*.php') as $file) {
-			// Получаем имя класса из имени файла (например, GreetCommand)
-			$className = basename($file, '.php');
-			// Собираем полное имя класса с неймспейсом (FQN)
-			$fullClassName = $namespace . '\\' . $className;
 
-			// Проверяем, существует ли класс и наследуется ли он от нашей базовой команды
-			if (class_exists($fullClassName) && is_subclass_of($fullClassName, Command::class)) {
-				$reflection = new \ReflectionClass($fullClassName);
+        try {
+            $command = $this->commands[ $commandName ];
 
-				// Убеждаемся, что класс можно инстанцировать (не абстрактный)
-				if (!$reflection->isAbstract()) {
-					$this->add(new $fullClassName());
-				}
-			}
-		}
-	}
+            $input->bind($command->getRegisteredArguments(),
+                         $command->getRegisteredOptions());
+            if (method_exists($input, 'validate')) {
+                $input->validate($command->getRegisteredArguments());
+            }
+            $command->bindProperties($input);
+
+            // 1. DISPATCH BEFORE COMMAND
+            if ($this->dispatcher) {
+                $event = new ConsoleCommandEvent($command, $input, $output);
+                $this->dispatcher->dispatch($event);
+
+                if (!$event->commandShouldRun()) {
+                    $output->writeln("<comment>Command execution was aborted by a listener.</comment>");
+
+                    return 113;
+                }
+            }
+
+            // 2. RUN COMMAND
+            $exitCode = $command->execute($input, $output);
+
+            // 3. DISPATCH AFTER COMMAND
+            if ($this->dispatcher) {
+                $terminateEvent = new ConsoleTerminateEvent($command,
+                                                            $input,
+                                                            $output,
+                                                            $exitCode);
+                $this->dispatcher->dispatch($terminateEvent);
+                $exitCode = $terminateEvent->getExitCode();
+            }
+
+            return $exitCode;
+        } catch ( Throwable $e ) {
+            $this->renderThrowable($e, $output);
+
+            return 1;
+        }
+    }
+
+
+    /**
+     * Renders a beautiful exception output with Stack Trace if verbose
+     */
+    private function renderThrowable(Throwable       $e,
+                                     OutputInterface $output): void {
+        $output->writeln('');
+        $output->writeln("<error>  [" . get_class($e) . "]  </error>");
+        $output->writeln("<error>  " . $e->getMessage() . "  </error>");
+        $output->writeln('');
+
+        $output->writeln("<comment>In {$e->getFile()} on line {$e->getLine()}</comment>");
+
+        if ($output->isVerbose()) {
+            $output->writeln('');
+            $output->writeln('<comment>Exception trace:</comment>');
+            foreach ($e->getTrace() as $i => $trace) {
+                $class = $trace['class'] ?? '';
+                $type  = $trace['type'] ?? '';
+                $func  = $trace['function'] ?? '';
+                $file  = $trace['file'] ?? 'n/a';
+                $line  = $trace['line'] ?? 'n/a';
+                $output->writeln(" {$i}. {$class}{$type}{$func}() at <info>{$file}:{$line}</info>");
+            }
+        }
+
+        $output->writeln('');
+    }
+
+    public function setDispatcher(EventDispatcher $dispatcher): void {
+        $this->dispatcher = $dispatcher;
+    }
+
+    private function setSystemCommands(): void {
+        $this->add(new ListCommand());
+        $this->add(new ServerConfigCommand());
+        $this->add(new HelpCommand());
+        $this->add(new ServeGuiCommand());
+        $this->add(new MacroCommand());
+        if ($this->config !== NULL) {
+            $this->add(new ScheduleRunCommand($this->config));
+        }
+    }
+
+    public function getName(): string { return $this->name; }
+
+    public function getVersion(): string { return $this->version; }
 }

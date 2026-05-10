@@ -3,10 +3,106 @@
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Smerteliko\MicroCli\Application;
+use Smerteliko\MicroCli\Config\Config;
+use Smerteliko\MicroCli\Config\Loader\PhpLoader;
+use Smerteliko\MicroCli\Config\Loader\XmlLoader;
+use Smerteliko\MicroCli\DI\Container;
+use Smerteliko\MicroCli\Discovery\CommandDiscoverer;
+use Smerteliko\MicroCli\EventDispatcher\EventDispatcher;
+use Smerteliko\MicroCli\Events\ConsoleCommandEvent;
+use Smerteliko\MicroCli\Events\ConsoleTerminateEvent;
+use Smerteliko\MicroCli\Helper\NotificationHelper;
+use Smerteliko\MicroCli\Macro\MacroManager;
 
-$app = new Application();
+// 1. Initialize DI Container
+$container = new Container();
 
-$commandsDir = __DIR__ . '/../src/Commands';
-$app->loadCommandsFromDirectory($commandsDir, 'App\\Commands');
+// 2. Setup Configuration
+$config = new Config();
+$config->addLoader(new PhpLoader());
+$config->load(__DIR__ . '/../config/app.php');
 
+// Register config in the container so commands can ask for it!
+$container->set(Config::class, $config);
+
+// 3. Initialize Application
+$app = new Application('Micro CLI Framework', '1.0.0', $container, $config);
+$container->set(Application::class, $app);
+
+// 4. Auto-discover User Commands using Container
+$discoverer = new CommandDiscoverer($container);
+$commandPaths = $config->get('commands_paths', []);
+
+foreach ($commandPaths as $path => $namespace) {
+	$commands = $discoverer->discover($path, $namespace);
+	foreach ($commands as $command) {
+		$app->add($command);
+	}
+}
+
+$dispatcher = new EventDispatcher();
+
+$dispatcher->addListener(ConsoleCommandEvent::class, function (ConsoleCommandEvent $event) {
+	if ($event->command->getName() === 'greet' && date('w') == 0) {
+		$event->output->writeln('<error>Sorry, no greetings on Sundays!</error>');
+		$event->disableCommand();
+	}
+});
+
+$startTime = microtime(true);
+$dispatcher->addListener(ConsoleTerminateEvent::class, function (ConsoleTerminateEvent $event) use ($startTime) {
+	$duration = round(microtime(true) - $startTime, 4);
+	if ($event->output->isVerbose()) {
+		$event->output->writeln("<comment>Command finished in {$duration} seconds with exit code {$event->getExitCode()}</comment>");
+	}
+});
+
+$app->setDispatcher($dispatcher);
+$container->set(EventDispatcher::class, $dispatcher);
+
+$dispatcher->addListener(ConsoleCommandEvent::class, function (ConsoleCommandEvent $event) {
+	$macroManager = new MacroManager();
+	$commandName = $event->command->getName();
+
+	// Мы не должны записывать сами команды управления макросами
+	if ($event->command instanceof \Smerteliko\MicroCli\Command\System\MacroCommand) {
+		return;
+	}
+
+	if ($macroManager->isRecording()) {
+		// Идеальный и надежный способ: берем всё из argv, кроме самого имени скрипта (index 0)
+		$actualArgs = array_slice($_SERVER['argv'], 1);
+
+		// Экранируем каждый аргумент и склеиваем в строку
+		$commandString = implode(' ', array_map('escapeshellarg', $actualArgs));
+
+		$macroManager->addCommand($commandString);
+
+		$event->output->writeln("<comment>[Macro Recording] Added: {$commandString}</comment>");
+	}
+});
+
+$executionStartTime = 0;
+
+$dispatcher->addListener(ConsoleCommandEvent::class, function (ConsoleCommandEvent $event) use (&$executionStartTime) {
+	$executionStartTime = microtime(true);
+
+	// (Тут твой старый код слушателя макросов, не удаляй его!)
+});
+
+$dispatcher->addListener(ConsoleTerminateEvent::class, function (ConsoleTerminateEvent $event) use (&$executionStartTime) {
+	$duration = microtime(true) - $executionStartTime;
+
+	// Если команда выполнялась дольше 5 секунд — отправляем уведомление
+	if ($duration > 5) {
+		$minutes = floor($duration / 60);
+		$seconds = round($duration % 60);
+		$timeStr = ($minutes > 0 ? "{$minutes}m " : "") . "{$seconds}s";
+
+		NotificationHelper::send(
+				"Command Finished: " . $event->command->getName(),
+				"Execution took {$timeStr}. Exit code: {$event->getExitCode()}"
+		);
+	}
+});
 exit($app->run());

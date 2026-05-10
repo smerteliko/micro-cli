@@ -2,31 +2,22 @@
 
 namespace Smerteliko\MicroCli\Output;
 
-class ConsoleOutput implements OutputInterface
+class BufferedOutput implements OutputInterface
 {
-
+    private string $buffer = '';
     private int $verbosity = self::VERBOSITY_NORMAL;
-
-    private const COLORS = [
-        '<info>'  => "\033[32m",
-        '</info>' => "\033[0m",
-        '<error>' => "\033[31m",
-        '</error>'=> "\033[0m",
-        '<comment>'=> "\033[33m",
-        '</comment>'=> "\033[0m",
-    ];
 
     public function write(string $message, int $options = self::VERBOSITY_NORMAL): void
     {
         if ($this->verbosity >= $options) {
-            echo $this->format($message);
+            $this->buffer .= $message;
         }
     }
 
     public function writeln(string $message, int $options = self::VERBOSITY_NORMAL): void
     {
         if ($this->verbosity >= $options) {
-            echo $this->format($message) . PHP_EOL;
+            $this->buffer .= $message . PHP_EOL;
         }
     }
 
@@ -50,8 +41,10 @@ class ConsoleOutput implements OutputInterface
         return $this->verbosity >= self::VERBOSITY_VERBOSE;
     }
 
-    private function format(string $message): string
+    public function fetch(): string
     {
-        return str_replace(array_keys(self::COLORS), array_values(self::COLORS), $message);
+        $content = $this->buffer;
+        $this->buffer = '';
+        return $content;
     }
 }

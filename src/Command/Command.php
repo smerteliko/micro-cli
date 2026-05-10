@@ -2,98 +2,181 @@
 
 namespace Smerteliko\MicroCli\Command;
 
+use ReflectionClass;
+use Smerteliko\MicroCli\Application;
+use Smerteliko\MicroCli\Attributes\Argument;
+use Smerteliko\MicroCli\Attributes\AsConsoleCommand;
+use Smerteliko\MicroCli\Attributes\Option;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\OutputInterface;
 
 abstract class Command
 {
-	public const ARG_REQUIRED = 1;
-	public const ARG_OPTIONAL = 2;
+    public const ARG_REQUIRED = 1;
+    public const ARG_OPTIONAL = 2;
 
-	protected string $name = '';
-	protected string $description = '';
+    protected ?string $name = '';
+    protected string $description = '';
+    protected array $arguments = [];
+    protected array $options = [];
+    protected bool $hidden = false;
+    protected string $schedule = '';
+    protected Application $application;
 
-	/** @var array<string, array> */
-	protected array $arguments = [];
+    public function __construct()
+    {
+        $this->parseAttributes();
+        $this->configure();
+    }
 
-	/** @var array<string, array> */
-	protected array $options = [];
+    /**
+     * Parses PHP 8 Attributes to auto-configure the command
+     */
+    private function parseAttributes(): void
+    {
+        $reflection = new ReflectionClass($this);
 
-	public function __construct()
-	{
-		$this->configure();
-	}
+        // 1. Parse Class Attribute (Name and Description)
+        $classAttributes = $reflection->getAttributes(AsConsoleCommand::class);
+        if (!empty($classAttributes)) {
+            /** @var AsConsoleCommand $commandAttribute */
+            $commandAttribute = $classAttributes[0]->newInstance();
+            $this->name = $commandAttribute->name;
+            $this->description = $commandAttribute->description;
+            $this->hidden = $commandAttribute->hidden;
+        }
 
-	abstract protected function configure(): void;
+        // 2. Parse Property Attributes (Arguments and Options)
+        foreach ($reflection->getProperties() as $property) {
+            $argAttributes = $property->getAttributes(Argument::class);
+            if (!empty($argAttributes)) {
+                /** @var Argument $arg */
+                $arg = $argAttributes[0]->newInstance();
+                $mode = $arg->required ? self::ARG_REQUIRED : self::ARG_OPTIONAL;
+                $this->addArgument($property->getName(), $mode, $arg->description, $arg->default);
+            }
 
-	abstract public function execute(InputInterface $input, OutputInterface $output): int;
+            $optAttributes = $property->getAttributes(Option::class);
+            if (!empty($optAttributes)) {
+                /** @var Option $opt */
+                $opt = $optAttributes[0]->newInstance();
+                $this->addOption($property->getName(), $opt->description, $opt->default);
+            }
+        }
+    }
 
-	protected function setName(string $name): self
-	{
-		$this->name = $name;
-		return $this;
-	}
+    /**
+     * Automatically binds input values to class properties based on Attributes
+     */
+    public function bindProperties(InputInterface $input): void
+    {
+        $reflection = new ReflectionClass($this);
 
-	public function getName(): string
-	{
-		return $this->name;
-	}
+        foreach ($reflection->getProperties() as $property) {
+            $name = $property->getName();
 
-	protected function setDescription(string $description): self
-	{
-		$this->description = $description;
-		return $this;
-	}
+            if (!empty($property->getAttributes(Argument::class))) {
+                $property->setValue($this, $input->getArgument($name));
+            }
 
-	public function getDescription(): string
-	{
-		return $this->description;
-	}
+            if (!empty($property->getAttributes(Option::class))) {
+                $property->setValue($this, $input->getOption($name));
+            }
+        }
+    }
 
-	/**
-	 * Регистрация ожидаемого аргумента
-	 */
-	protected function addArgument(string $name, string $description = '', mixed $default = null): self
-	{
-		$this->arguments[$name] = [
-			'description' => $description,
-			'default' => $default,
-		];
-		return $this;
-	}
+    // Optional manual configuration method
+    protected function configure(): void
+    {
+    }
 
-	/**
-	 * Регистрация ожидаемой опции (--option)
-	 */
-	protected function addOption(string $name, string $description = '', mixed $default = false): self
-	{
-		$this->options[$name] = [
-			'description' => $description,
-			'default' => $default,
-		];
-		return $this;
-	}
 
-	public function getRegisteredArguments(): array
-	{
-		return $this->arguments;
-	}
+    abstract public function execute(InputInterface $input, OutputInterface $output): int;
 
-	public function getRegisteredOptions(): array
-	{
-		return $this->options;
-	}
+    public function setName(string $name): self
+    {
+        $this->name = $name;
+        return $this;
+    }
 
-	/**
-	 * Registers an expected argument.
-	 */
-	protected function addArgument(string $name, int $mode = self::ARG_OPTIONAL, string $description = '', mixed $default = null): self
-	{
-		$this->arguments[$name] = [
-			'mode' => $mode,
-			'description' => $description,
-			'default' => $default,
-		];
-		return $this;
-	}
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    protected function setDescription(string $description): self
+    {
+        $this->description = $description;
+        return $this;
+    }
+
+    public function getDescription(): string
+    {
+        return $this->description;
+    }
+
+
+    protected function addOption(string $name, string $description = '', mixed $default = false): self
+    {
+        $this->options[$name] = [
+            'description' => $description,
+            'default' => $default,
+        ];
+        return $this;
+    }
+
+    public function getRegisteredArguments(): array
+    {
+        return $this->arguments;
+    }
+
+    public function getRegisteredOptions(): array
+    {
+        return $this->options;
+    }
+
+    /**
+     * Registers an expected argument.
+     */
+    protected function addArgument(string $name, int $mode = self::ARG_OPTIONAL, string $description = '', mixed $default = null): self
+    {
+        $this->arguments[$name] = [
+            'mode' => $mode,
+            'description' => $description,
+            'default' => $default,
+        ];
+        return $this;
+    }
+
+    public function setApplication(Application $application): void
+    {
+        $this->application = $application;
+    }
+
+    public function getApplication(): ?Application
+    {
+        return $this->application;
+    }
+
+    protected function setSchedule(string $cronExpression): self
+    {
+        $this->schedule = $cronExpression;
+        return $this;
+    }
+
+    public function getSchedule(): ?string
+    {
+        return $this->schedule;
+    }
+
+    public function setHidden(bool $hidden): void
+    {
+        $this->hidden = $hidden;
+    }
+
+    public function isHidden(): bool
+    {
+        return $this->hidden;
+    }
+
 }

@@ -1,33 +1,46 @@
 <?php
+
 namespace App\Commands;
 
-use Smerteliko\MicroCli\Application;
+use Smerteliko\MicroCli\Attributes\AsConsoleCommand;
+use Smerteliko\MicroCli\Attributes\Argument;
+use Smerteliko\MicroCli\Attributes\Option;
 use Smerteliko\MicroCli\Command\Command;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\OutputInterface;
+
+#[AsConsoleCommand(name: 'greet', description: 'Advanced greeting command for testing all input cases')]
 class GreetCommand extends Command
 {
-	protected function configure(): void
-	{
-		$this->setName('greet')
-		     ->setDescription('Prints a greeting to the terminal')
-		     ->addArgument('name', 'The name of the user', 'World')
-		     ->addOption('yell', 'If set, the greeting will be uppercase', false);
-	}
+    #[Argument(description: 'Who do you want to greet?', required: true)]
+    protected ?string $name;
 
-	public function execute(InputInterface $input, OutputInterface $output): int
-	{
-		// Пока мы получаем аргумент по индексу (скоро это исправим), но опции уже по имени
-		$name = $input->getArgument(0) ?? $this->getRegisteredArguments()['name']['default'];
-		$yell = $input->hasOption('yell');
+    #[Argument(description: 'Custom greeting word', required: false, default: 'Hello')]
+    public string $word;
 
-		$message = "Hello, {$name}!";
-		if ($yell) {
-			$message = strtoupper($message);
-		}
+    #[Option(shortcut: 'y', description: 'Yell the output (uppercase)', default: false)]
+    public bool $yell = false;
 
-		$output->writeln("<info>{$message}</info>");
+    #[Option(shortcut: 'c', description: 'Color tag (info, error, comment)', default: 'info')]
+    public string $color;
 
-		return 0;
-	}
+    #[Option(shortcut: 'r', description: 'Number of times to repeat the greeting', default: 1)]
+    public int $repeat;
+
+    public function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $text = "{$this->word}, {$this->name}!";
+
+        if ($this->yell) {
+            $text = strtoupper($text);
+        }
+
+        $tag = in_array($this->color, ['info', 'error', 'comment']) ? $this->color : 'info';
+
+        for ($i = 0; $i < $this->repeat; $i++) {
+            $output->writeln("<{$tag}>{$text}</{$tag}>");
+        }
+
+        return 0;
+    }
 }
