@@ -2,6 +2,9 @@
 
 namespace Smerteliko\MicroCli\Style;
 
+use Smerteliko\MicroCli\Helper\FormatterHelper;
+use Smerteliko\MicroCli\Helper\ProcessHelper;
+use Smerteliko\MicroCli\Helper\ProgressBar;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\OutputInterface;
 
@@ -13,9 +16,6 @@ class Style
 	) {
 	}
 
-	/**
-	 * Prints a nicely formatted title.
-	 */
 	public function title(string $message): void
 	{
 		$this->newLine();
@@ -24,41 +24,26 @@ class Style
 		$this->newLine();
 	}
 
-	/**
-	 * Prints a success block.
-	 */
 	public function success(string $message): void
 	{
 		$this->block($message, 'OK', 'info');
 	}
 
-	/**
-	 * Prints an error block.
-	 */
 	public function error(string $message): void
 	{
 		$this->block($message, 'ERROR', 'error');
 	}
 
-	/**
-	 * Prints a warning block.
-	 */
 	public function warning(string $message): void
 	{
 		$this->block($message, 'WARNING', 'comment');
 	}
 
-	/**
-	 * Prints an informational block.
-	 */
 	public function info(string $message): void
 	{
 		$this->block($message, 'INFO', 'info');
 	}
 
-	/**
-	 * Prints simple text, optionally handling an array of lines.
-	 */
 	public function text(string|array $message): void
 	{
 		$messages = is_array($message) ? $message : [$message];
@@ -67,9 +52,6 @@ class Style
 		}
 	}
 
-	/**
-	 * Adds blank lines.
-	 */
 	public function newLine(int $count = 1): void
 	{
 		for ($i = 0; $i < $count; $i++) {
@@ -77,9 +59,6 @@ class Style
 		}
 	}
 
-	/**
-	 * Internal method to format blocks.
-	 */
 	private function block(string $message, string $type, string $tag): void
 	{
 		$this->newLine();
@@ -99,9 +78,6 @@ class Style
 		return $answer === '' ? (string) $default : $answer;
 	}
 
-	/**
-	 * Asks the user a yes/no confirmation question.
-	 */
 	public function confirm(string $question, bool $default = true): bool
 	{
 		$choices = $default ? '[Y/n]' : '[y/N]';
@@ -127,5 +103,25 @@ class Style
 		      ->render();
 
 		$this->newLine();
+	}
+
+	public function createProgressBar(int $max = 0): ProgressBar
+	{
+		return new ProgressBar($this->output, $max);
+	}
+
+	public function runProcess(string|array $command): int
+	{
+		$process = new ProcessHelper($this->output);
+		$this->newLine();
+		$exitCode = $process->run($command);
+		$this->newLine();
+
+		return $exitCode;
+	}
+
+	public function truncate(string $message, int $length): string
+	{
+		return ( new FormatterHelper() )->truncate($message, $length);
 	}
 }

@@ -49,6 +49,7 @@ class GreetCommand extends Command
 		for ($i = 0; $i < $this->repeat; $i++) {
 			$output->writeln("<{$tag}>{$text}</{$tag}>");
 		}
+
 		return 0; // Код успешного завершения
 	}
 }
