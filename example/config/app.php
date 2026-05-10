@@ -1,11 +1,11 @@
 <?php
 
 return [
-		'commands_paths' => [
-				__DIR__ . '/../src/Commands' => 'App\\Commands',
-		],
-		'schedule' => [
-				'greet Smerteliko --yell' => '*/2 * * * *', // Каждые 2 минуты
-				'greet Admin'             => '0 12 * * *',  // В 12:00 каждый день
-		],
+        'commands_paths' => [
+                __DIR__ . '/../src/Commands' => 'App\\Commands',
+        ],
+        'schedule' => [
+                'greet Smerteliko --yell' => '*/2 * * * *',
+                'greet Admin'             => '0 12 * * *',
+        ],
 ];

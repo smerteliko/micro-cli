@@ -13,48 +13,47 @@ use RuntimeException;
 #[AsConsoleCommand(name: 'serve:gui', description: 'Starts a beautiful Web GUI dashboard for your CLI commands')]
 class ServeGuiCommand extends Command
 {
-	#[Option(shortcut: 'p', description: 'Port to run the GUI on', default: 8000)]
-	public int $port;
+    #[Option(shortcut: 'p', description: 'Port to run the GUI on', default: 8000)]
+    public int $port;
 
-	public function execute(InputInterface $input, OutputInterface $output): int
-	{
-		$io = new Style($input, $output);
+    public function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new Style($input, $output);
 
-		$host = '127.0.0.1';
-		$port = $this->port;
-		$url = "http://{$host}:{$port}";
+        $host = '127.0.0.1';
+        $port = $this->port;
+        $url = "http://{$host}:{$port}";
 
-		$binPath = realpath($_SERVER['PHP_SELF']);
+        $binPath = realpath($_SERVER['PHP_SELF']);
 
-		if (!$binPath) {
-			$io->error("Could not resolve the executable path.");
-			return 1;
-		}
+        if (!$binPath) {
+            $io->error("Could not resolve the executable path.");
+            return 1;
+        }
 
-		$routerPath = sys_get_temp_dir() . '/microcli_router_' . md5(uniqid('',
-		                                                                    TRUE)) . '.php';
-		file_put_contents($routerPath, $this->getRouterCode($binPath));
+        $routerPath = sys_get_temp_dir() . '/microcli_router_' . md5(uniqid('',
+                                                                            TRUE)) . '.php';
+        file_put_contents($routerPath, $this->getRouterCode($binPath));
 
-		$io->success("Web GUI is running at {$url}");
-		$io->text("Press <comment>Ctrl+C</comment> to stop.");
+        $io->success("Web GUI is running at {$url}");
+        $io->text("Press <comment>Ctrl+C</comment> to stop.");
 
-		$command = sprintf('php -S %s:%d %s', $host, $port, escapeshellarg($routerPath));
+        $command = sprintf('php -S %s:%d %s', $host, $port, escapeshellarg($routerPath));
 
-		passthru($command);
+        passthru($command);
 
-		if (file_exists($routerPath)) {
-			unlink($routerPath);
-		}
+        if (file_exists($routerPath)) {
+            unlink($routerPath);
+        }
 
-		return 0;
-	}
+        return 0;
+    }
 
-	private function getRouterCode(string $binPath): string
-	{
-		$binPathEscaped = var_export($binPath, true);
+    private function getRouterCode(string $binPath): string
+    {
+        $binPathEscaped = var_export($binPath, true);
 
-		// Используем конкатенацию для переменной, а остальной код отдаем через Nowdoc (<<<'PHP')
-		return "<?php\n\$binPath = {$binPathEscaped};\n" . <<<'PHP'
+        return "<?php\n\$binPath = {$binPathEscaped};\n" . <<<'PHP'
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 if ($uri === '/api/run') {
@@ -151,5 +150,5 @@ function getHtmlTemplate() {
 HTML;
 }
 PHP;
-	}
+    }
 }

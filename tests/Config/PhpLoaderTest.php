@@ -8,48 +8,48 @@ use RuntimeException;
 
 class PhpLoaderTest extends TestCase
 {
-	private string $tempDir;
+    private string $tempDir;
 
-	protected function setUp(): void
-	{
-		$this->tempDir = sys_get_temp_dir() . '/microcli_tests';
-		if (!is_dir($this->tempDir)) {
-			mkdir($this->tempDir);
-		}
-	}
+    protected function setUp(): void
+    {
+        $this->tempDir = sys_get_temp_dir() . '/microcli_tests';
+        if (!is_dir($this->tempDir)) {
+            mkdir($this->tempDir);
+        }
+    }
 
-	public function testLoadsValidPhpConfig(): void
-	{
-		$file = $this->tempDir . '/valid.php';
-		file_put_contents($file, "<?php\nreturn ['foo' => 'bar'];");
+    public function testLoadsValidPhpConfig(): void
+    {
+        $file = $this->tempDir . '/valid.php';
+        file_put_contents($file, "<?php\nreturn ['foo' => 'bar'];");
 
-		$loader = new PhpLoader();
-		$this->assertTrue($loader->supports($file));
+        $loader = new PhpLoader();
+        $this->assertTrue($loader->supports($file));
 
-		$data = $loader->load($file);
-		$this->assertSame(['foo' => 'bar'], $data);
+        $data = $loader->load($file);
+        $this->assertSame(['foo' => 'bar'], $data);
 
-		unlink($file);
-	}
+        unlink($file);
+    }
 
-	public function testThrowsExceptionOnMissingFile(): void
-	{
-		$loader = new PhpLoader();
+    public function testThrowsExceptionOnMissingFile(): void
+    {
+        $loader = new PhpLoader();
 
-		$this->expectException(RuntimeException::class);
-		$loader->load($this->tempDir . '/missing.php');
-	}
+        $this->expectException(RuntimeException::class);
+        $loader->load($this->tempDir . '/missing.php');
+    }
 
-	public function testThrowsExceptionOnInvalidReturnType(): void
-	{
-		$file = $this->tempDir . '/invalid_return.php';
-		file_put_contents($file, "<?php\nreturn 'not an array';");
+    public function testThrowsExceptionOnInvalidReturnType(): void
+    {
+        $file = $this->tempDir . '/invalid_return.php';
+        file_put_contents($file, "<?php\nreturn 'not an array';");
 
-		$loader = new PhpLoader();
+        $loader = new PhpLoader();
 
-		$this->expectException(RuntimeException::class);
-		$loader->load($file);
+        $this->expectException(RuntimeException::class);
+        $loader->load($file);
 
-		unlink($file);
-	}
+        unlink($file);
+    }
 }

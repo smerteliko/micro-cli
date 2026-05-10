@@ -11,73 +11,70 @@ use Smerteliko\MicroCli\Style\Style;
 #[AsConsoleCommand(name: 'list', description: 'Lists all available commands')]
 class ListCommand extends Command
 {
-	public function execute(InputInterface $input, OutputInterface $output): int
-	{
-		$io = new Style($input, $output);
+    public function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new Style($input, $output);
 
-		$io->text('<comment>Usage:</comment>');
-		$io->text('  command [options] [arguments]');
-		$io->newLine();
+        $io->text('<comment>Usage:</comment>');
+        $io->text('  command [options] [arguments]');
+        $io->newLine();
 
-		// --- НОВЫЙ БЛОК: Глобальные опции ---
-		$io->text('<comment>Options:</comment>');
-		$globalOptions = [
-			'-h, --help'    => 'Display help for the given command',
-			'-q, --quiet'   => 'Do not output any message',
-			'-v, --verbose' => 'Increase the verbosity of messages: 1 for normal output, 2 for more verbose output',
-		];
+        $io->text('<comment>Options:</comment>');
+        $globalOptions = [
+            '-h, --help'    => 'Display help for the given command',
+            '-q, --quiet'   => 'Do not output any message',
+            '-v, --verbose' => 'Increase the verbosity of messages',
+        ];
 
-		// Находим самую длинную опцию для выравнивания
-		$maxOptWidth = 0;
-		foreach (array_keys($globalOptions) as $optName) {
-			if (strlen($optName) > $maxOptWidth) {
-				$maxOptWidth = strlen($optName);
-			}
-		}
+        $maxOptWidth = 0;
+        foreach (array_keys($globalOptions) as $optName) {
+            $maxOptWidth = max($maxOptWidth, strlen($optName));
+        }
 
-		foreach ($globalOptions as $optName => $desc) {
-			$paddedOpt = str_pad($optName, $maxOptWidth + 2);
-			$output->writeln("  <info>{$paddedOpt}</info>{$desc}");
-		}
-		$io->newLine();
-		// ------------------------------------
+        foreach ($globalOptions as $optName => $desc) {
+            $output->writeln("  <info>" . str_pad($optName, $maxOptWidth + 2) . "</info>{$desc}");
+        }
+        $io->newLine();
 
-		$io->text('<comment>Available commands:</comment>');
+        $io->text('<comment>Available commands:</comment>');
 
-		$commands = $this->getApplication()->all();
-		ksort($commands);
+        $commands = $this->getApplication()->all();
 
-		$namespaces = [];
-		$maxWidth = 0;
+        // 1. Группируем команды
+        $grouped = [];
+        $maxWidth = 0;
 
-		// Группировка и подсчет длины команд
-		foreach ($commands as $name => $command) {
-			$parts = explode(':', $name);
-			$namespace = count($parts) > 1 ? $parts[0] : '_global';
+        foreach ($commands as $name => $command) {
+            if ($command->isHidden()) {
+                continue;
+            }
+            $parts = explode(':', $name);
+            $namespace = count($parts) > 1 ? $parts[0] : '';
 
-			$namespaces[$namespace][$name] = $command;
+            $grouped[$namespace][$name] = $command;
+            $maxWidth = max($maxWidth, strlen($name));
 
-			if (strlen($name) > $maxWidth) {
-				$maxWidth = strlen($name);
-			}
-		}
+        }
 
-		// Рендеринг команд "лесенкой"
-		foreach ($namespaces as $namespace => $cmds) {
-			if ($namespace !== '_global') {
-				$io->text(" <comment>{$namespace}</comment>");
-			}
+        ksort($grouped);
 
-			foreach ($cmds as $name => $command) {
-				$description = $command->getDescription() ?: '';
-				$paddedName = str_pad($name, $maxWidth + 2);
+        foreach ($grouped as $namespace => $cmds) {
+            if ($namespace !== '') {
+                $io->text(" <comment>{$namespace}</comment>");
+            }
 
-				$output->writeln("    <info>{$paddedName}</info>{$description}");
-			}
-		}
+            ksort($cmds);
 
-		$io->newLine();
+            foreach ($cmds as $name => $command) {
+                $description = $command->getDescription() ?: '';
+                $paddedName = str_pad($name, $maxWidth + 2);
 
-		return 0;
-	}
+                $output->writeln("    <info>{$paddedName}</info>{$description}");
+            }
+        }
+
+        $io->newLine();
+
+        return 0;
+    }
 }

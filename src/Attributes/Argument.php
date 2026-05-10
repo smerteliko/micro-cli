@@ -7,10 +7,10 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class Argument
 {
-	public function __construct(
-		public string $description = '',
-		public bool $required = false,
-		public mixed $default = null
-	) {
-	}
+    public function __construct(
+        public string $description = '',
+        public bool $required = false,
+        public mixed $default = null
+    ) {
+    }
 }

@@ -8,45 +8,45 @@ use Smerteliko\MicroCli\Output\BufferedOutput;
 
 class CommandTester
 {
-	private Command $command;
-	private BufferedOutput $output;
-	private int $statusCode = 0;
+    private Command $command;
+    private BufferedOutput $output;
+    private int $statusCode = 0;
 
-	public function __construct(Command $command)
-	{
-		$this->command = $command;
-		$this->output = new BufferedOutput();
-	}
+    public function __construct(Command $command)
+    {
+        $this->command = $command;
+        $this->output = new BufferedOutput();
+    }
 
-	public function execute(array $inputArgs = []): int
-	{
-		$argv = array_merge(['console', $this->command->getName()], $inputArgs);
+    public function execute(array $inputArgs = []): int
+    {
+        $argv = array_merge(['console', $this->command->getName()], $inputArgs);
 
-		$input = new ArgvInput($argv);
+        $input = new ArgvInput($argv);
 
-		$input->bind(
-			$this->command->getRegisteredArguments(),
-			$this->command->getRegisteredOptions()
-		);
+        $input->bind(
+            $this->command->getRegisteredArguments(),
+            $this->command->getRegisteredOptions()
+        );
 
-		if (method_exists($input, 'validate')) {
-			$input->validate($this->command->getRegisteredArguments());
-		}
+        if (method_exists($input, 'validate')) {
+            $input->validate($this->command->getRegisteredArguments());
+        }
 
-		$this->command->bindProperties($input);
+        $this->command->bindProperties($input);
 
-		$this->statusCode = $this->command->execute($input, $this->output);
+        $this->statusCode = $this->command->execute($input, $this->output);
 
-		return $this->statusCode;
-	}
+        return $this->statusCode;
+    }
 
-	public function getDisplay(): string
-	{
-		return $this->output->fetch();
-	}
+    public function getDisplay(): string
+    {
+        return $this->output->fetch();
+    }
 
-	public function getStatusCode(): int
-	{
-		return $this->statusCode;
-	}
+    public function getStatusCode(): int
+    {
+        return $this->statusCode;
+    }
 }

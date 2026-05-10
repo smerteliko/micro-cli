@@ -8,38 +8,32 @@ use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\OutputInterface;
 use Smerteliko\MicroCli\Style\Style;
 
-#[AsConsoleCommand(name: 'import:data', description: 'Simulates a long-running data import process')]
-class ImportDataCommand extends Command
-{
-	public function execute(InputInterface $input, OutputInterface $output): int
-	{
-		$io = new Style($input, $output);
+#[AsConsoleCommand( name: 'import:data', description: 'Simulates a long-running data import process', hidden: TRUE )]
+class ImportDataCommand extends Command {
+    public function execute(InputInterface  $input,
+                            OutputInterface $output): int {
+        $io = new Style($input, $output);
 
-		$io->title('Starting Data Import');
-		$io->text('Fetching records from external API...');
+        $io->title('Starting Data Import');
+        $io->text('Fetching records from external API...');
 
-		$totalRecords = 50;
+        $totalRecords = 50;
 
-		// 1. Инициализируем ProgressBar
-		$progressBar = $io->createProgressBar($totalRecords);
+        $progressBar = $io->createProgressBar($totalRecords);
 
-		// 2. Запускаем
-		$progressBar->start();
+        $progressBar->start();
 
-		for ($i = 0; $i < $totalRecords; $i++) {
-			// Эмулируем задержку (тяжелую работу)
-			usleep(50000); // 50 миллисекунд
+        for ($i = 0; $i < $totalRecords; $i++) {
+            usleep(50000);
 
-			// 3. Продвигаем прогресс
-			$progressBar->advance();
-		}
+            $progressBar->advance();
+        }
 
-		// 4. Завершаем
-		$progressBar->finish();
+        $progressBar->finish();
 
-		$io->success('Import completed successfully!');
+        $io->success('Import completed successfully!');
 
 
-		return 0;
-	}
+        return 0;
+    }
 }

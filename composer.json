@@ -1,6 +1,6 @@
 {
     "name": "smerteliko/micro-cli",
-    "description": "A lightweight, object-oriented PHP CLI framework.",
+    "description": "A lightweight, powerful PHP CLI framework with zero dependencies and built-in Web GUI.",
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -28,8 +28,19 @@
             "App\\": "example/src/"
         }
     },
+    "bin": [
+        "bin/micro-cli"
+    ],
+    "scripts": {
+        "init-project": "php bin/micro-cli system:init",
+        "gui": "php bin/micro-cli serve:gui",
+        "test": "vendor/bin/phpunit"
+    },
     "minimum-stability": "stable",
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     }
 }
