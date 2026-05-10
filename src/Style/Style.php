@@ -124,4 +124,81 @@ class Style
 	{
 		return ( new FormatterHelper() )->truncate($message, $length);
 	}
+
+	public function askHidden(string $question): string
+	{
+		$this->output->write("<comment>{$question}: </comment>");
+
+		$sttyMode = shell_exec('stty -g');
+		shell_exec('stty -echo');
+
+		$handle = fopen('php://stdin', 'r');
+		$answer = trim(fgets($handle));
+		fclose($handle);
+
+		shell_exec(sprintf('stty %s', $sttyMode));
+
+		$this->newLine();
+
+		return $answer;
+	}
+
+	public function choice(string $question, array $choices, mixed $default = null, bool $multiSelect = false): string|array
+	{
+		if (empty($choices)) {
+			throw new \InvalidArgumentException('Choices array cannot be empty.');
+		}
+
+		$this->output->writeln("<comment>{$question}</comment>");
+
+		if ($multiSelect) {
+			$this->output->writeln("  <info>(Separate multiple answers with a comma, e.g., 1,3)</info>");
+		}
+
+		$isAssoc = array_keys($choices) !== range(0, count($choices) - 1);
+		$displayMap = [];
+
+		foreach ($choices as $key => $value) {
+			$displayKey = $isAssoc ? (string) $key : (string) ($key + 1);
+			$displayMap[$displayKey] = $value;
+			$this->output->writeln(sprintf("  [<info>%s</info>] %s", $displayKey, $value));
+		}
+
+		$defaultPrompt = $default !== null ? " [<info>{$default}</info>]" : '';
+
+		while (true) {
+			$this->output->write("<comment> >{$defaultPrompt} </comment>");
+			$handle = fopen('php://stdin', 'r');
+			$answer = trim(fgets($handle));
+			fclose($handle);
+
+			if ($answer === '' && $default !== null) {
+				if ($multiSelect) {
+					// Если дефолт передан как строка "1,3", разбиваем её
+					return is_string($default) ? array_map('trim', explode(',', $default)) : (array) $default;
+				}
+				return (string) $default;
+			}
+
+			$rawAnswers = $multiSelect ? array_map('trim', explode(',', $answer)) : [$answer];
+			$selectedValues = [];
+			$hasError = false;
+
+			foreach ($rawAnswers as $ans) {
+				if (array_key_exists($ans, $displayMap)) {
+					$selectedValues[] = $displayMap[$ans];
+				} elseif (in_array($ans, $displayMap, true)) {
+					$selectedValues[] = $ans;
+				} else {
+					$this->error(sprintf('Value "%s" is invalid.', $ans));
+					$hasError = true;
+					break; // Прерываем проверку, просим ввести заново
+				}
+			}
+
+			if (!$hasError) {
+				return $multiSelect ? $selectedValues : $selectedValues[0];
+			}
+		}
+	}
 }
