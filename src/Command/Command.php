@@ -20,6 +20,10 @@ abstract class Command
 	protected array $arguments = [];
 	protected array $options = [];
 
+	protected string $schedule = '';
+
+	protected Application $application;
+
 	public function __construct()
 	{
 		$this->parseAttributes();

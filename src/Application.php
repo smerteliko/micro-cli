@@ -5,7 +5,9 @@ namespace Smerteliko\MicroCli;
 use Smerteliko\MicroCli\Command\Command;
 use Smerteliko\MicroCli\Command\System\ListCommand;
 use Smerteliko\MicroCli\Command\System\HelpCommand;
+use Smerteliko\MicroCli\Command\System\MacroCommand;
 use Smerteliko\MicroCli\Command\System\ScheduleRunCommand;
+use Smerteliko\MicroCli\Command\System\ServeGuiCommand;
 use Smerteliko\MicroCli\Command\System\ServerConfigCommand;
 use Smerteliko\MicroCli\EventDispatcher\EventDispatcher;
 use Smerteliko\MicroCli\Events\ConsoleCommandEvent;
@@ -26,6 +28,8 @@ class Application {
 		$this->add(new ListCommand());
 		$this->add(new ServerConfigCommand());
 		$this->add(new HelpCommand());
+		$this->add(new ServeGuiCommand());
+		$this->add(new MacroCommand());
 		if ($this->config !== NULL) {
 			$this->add(new ScheduleRunCommand($this->config));
 		}

@@ -11,6 +11,7 @@ use Smerteliko\MicroCli\Discovery\CommandDiscoverer;
 use Smerteliko\MicroCli\EventDispatcher\EventDispatcher;
 use Smerteliko\MicroCli\Events\ConsoleCommandEvent;
 use Smerteliko\MicroCli\Events\ConsoleTerminateEvent;
+use Smerteliko\MicroCli\Macro\MacroManager;
 
 // 1. Initialize DI Container
 $container = new Container();
@@ -57,4 +58,26 @@ $dispatcher->addListener(ConsoleTerminateEvent::class, function (ConsoleTerminat
 
 $app->setDispatcher($dispatcher);
 $container->set(EventDispatcher::class, $dispatcher);
+
+$dispatcher->addListener(ConsoleCommandEvent::class, function (ConsoleCommandEvent $event) {
+	$macroManager = new MacroManager();
+	$commandName = $event->command->getName();
+
+	// Мы не должны записывать сами команды управления макросами
+	if ($event->command instanceof \Smerteliko\MicroCli\Command\System\MacroCommand) {
+		return;
+	}
+
+	if ($macroManager->isRecording()) {
+		// Идеальный и надежный способ: берем всё из argv, кроме самого имени скрипта (index 0)
+		$actualArgs = array_slice($_SERVER['argv'], 1);
+
+		// Экранируем каждый аргумент и склеиваем в строку
+		$commandString = implode(' ', array_map('escapeshellarg', $actualArgs));
+
+		$macroManager->addCommand($commandString);
+
+		$event->output->writeln("<comment>[Macro Recording] Added: {$commandString}</comment>");
+	}
+});
 exit($app->run());
