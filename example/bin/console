@@ -1,0 +1,12 @@
+#!/usr/bin/env php
+<?php
+require_once __DIR__ . '/../../vendor/autoload.php';
+
+use Smerteliko\MicroCli\Application;
+
+$app = new Application();
+
+$commandsDir = __DIR__ . '/../src/Commands';
+$app->loadCommandsFromDirectory($commandsDir, 'App\\Commands');
+
+exit($app->run());
