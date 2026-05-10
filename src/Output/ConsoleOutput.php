@@ -5,6 +5,8 @@ namespace Smerteliko\MicroCli\Output;
 class ConsoleOutput implements OutputInterface
 {
 
+	private int $verbosity = self::VERBOSITY_NORMAL;
+
 	private const COLORS = [
 		'<info>'  => "\033[32m",
 		'</info>' => "\033[0m",
@@ -14,14 +16,38 @@ class ConsoleOutput implements OutputInterface
 		'</comment>'=> "\033[0m",
 	];
 
-	public function write(string $message): void
+	public function write(string $message, int $options = self::VERBOSITY_NORMAL): void
 	{
-		echo $this->format($message);
+		if ($this->verbosity >= $options) {
+			echo $this->format($message);
+		}
 	}
 
-	public function writeln(string $message): void
+	public function writeln(string $message, int $options = self::VERBOSITY_NORMAL): void
 	{
-		echo $this->format($message) . PHP_EOL;
+		if ($this->verbosity >= $options) {
+			echo $this->format($message) . PHP_EOL;
+		}
+	}
+
+	public function setVerbosity(int $level): void
+	{
+		$this->verbosity = $level;
+	}
+
+	public function getVerbosity(): int
+	{
+		return $this->verbosity;
+	}
+
+	public function isQuiet(): bool
+	{
+		return $this->verbosity === self::VERBOSITY_QUIET;
+	}
+
+	public function isVerbose(): bool
+	{
+		return $this->verbosity >= self::VERBOSITY_VERBOSE;
 	}
 
 	private function format(string $message): string

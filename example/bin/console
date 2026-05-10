@@ -3,8 +3,16 @@
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Smerteliko\MicroCli\Application;
+use Smerteliko\MicroCli\Config\Config;
+use Smerteliko\MicroCli\Config\Loader\PhpLoader;
+use Smerteliko\MicroCli\Config\Loader\XmlLoader;
 
 $app = new Application();
+
+$config = new Config();
+$config->addLoader(new PhpLoader())
+       ->addLoader(new XmlLoader());
+$config->load(__DIR__ . '/../config/app.php');
 
 $commandsDir = __DIR__ . '/../src/Commands';
 $app->loadCommandsFromDirectory($commandsDir, 'App\\Commands');

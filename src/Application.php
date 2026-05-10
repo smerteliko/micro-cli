@@ -16,7 +16,13 @@ class Application
 
 	public function add(Command $command): void
 	{
+		$command->setApplication($this); // Инжектим приложение в команду
 		$this->commands[$command->getName()] = $command;
+	}
+
+	public function all(): array
+	{
+		return $this->commands;
 	}
 
 	public function run(?InputInterface $input = null, ?OutputInterface $output = null): int

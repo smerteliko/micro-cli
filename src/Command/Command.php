@@ -2,6 +2,7 @@
 
 namespace Smerteliko\MicroCli\Command;
 
+use Smerteliko\MicroCli\Application;
 use Smerteliko\MicroCli\Input\InputInterface;
 use Smerteliko\MicroCli\Output\OutputInterface;
 
@@ -18,6 +19,9 @@ abstract class Command
 
 	/** @var array<string, array> */
 	protected array $options = [];
+
+	protected ?Application $application = null;
+	protected ?string $schedule = null; // Поле для cron-выражения
 
 	public function __construct()
 	{
@@ -50,17 +54,6 @@ abstract class Command
 		return $this->description;
 	}
 
-	/**
-	 * Регистрация ожидаемого аргумента
-	 */
-	protected function addArgument(string $name, string $description = '', mixed $default = null): self
-	{
-		$this->arguments[$name] = [
-			'description' => $description,
-			'default' => $default,
-		];
-		return $this;
-	}
 
 	/**
 	 * Регистрация ожидаемой опции (--option)
@@ -95,5 +88,26 @@ abstract class Command
 			'default' => $default,
 		];
 		return $this;
+	}
+
+	public function setApplication(Application $application): void
+	{
+		$this->application = $application;
+	}
+
+	public function getApplication(): ?Application
+	{
+		return $this->application;
+	}
+
+	protected function setSchedule(string $cronExpression): self
+	{
+		$this->schedule = $cronExpression;
+		return $this;
+	}
+
+	public function getSchedule(): ?string
+	{
+		return $this->schedule;
 	}
 }
